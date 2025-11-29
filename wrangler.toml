@@ -1,0 +1,3 @@
+name = "minecraft-skin-proxy"
+main = "src/worker.js"
+compatibility_date = "2025-11-29"
