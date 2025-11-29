@@ -25,7 +25,10 @@ export default {
         method: request.method,
         headers: forwardedHeaders,
         redirect: 'follow',
-        body: request.body
+        body: request.body,
+        cf: {
+          resolveOverride: 'mc-heads.net'
+        }
       })
     } catch (error) {
       return new Response(null, { status: 204 })
