@@ -41,6 +41,8 @@ export default {
         cf: {
           resolveOverride: "mc-heads.net",
           colo: "SJC",
+          cacheEverything: true,
+          cacheTtl: 86400,
         },
       });
     } catch (error) {
