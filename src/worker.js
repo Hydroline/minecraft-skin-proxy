@@ -7,6 +7,15 @@ const CLEAN_HEADERS = [
   "Sec-Fetch-Site",
   "Sec-Fetch-Dest",
   "Sec-Fetch-User",
+  "CF-Connecting-IP",
+  "True-Client-IP",
+  "X-Real-IP",
+];
+
+const IP_CLEAN_HEADERS = [
+  "X-Forwarded-For",
+  "CF-Connecting-IP",
+  "True-Client-IP",
 ];
 
 export default {
@@ -18,6 +27,9 @@ export default {
     for (const header of CLEAN_HEADERS) {
       forwardedHeaders.delete(header);
     }
+    for (const header of IP_CLEAN_HEADERS) {
+      forwardedHeaders.set(header, "");
+    }
 
     let response;
     try {
@@ -28,6 +40,7 @@ export default {
         body: request.body,
         cf: {
           resolveOverride: "mc-heads.net",
+          colo: "SJC",
         },
       });
     } catch (error) {
