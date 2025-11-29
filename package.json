@@ -1,0 +1,15 @@
+{
+  "name": "minecraft-skin-proxy",
+  "version": "1.0.0",
+  "description": "Proxy middleware for minecraft skin services in Cloudflare workers environments.",
+  "main": "src/worker.js",
+  "scripts": {
+    "cf:dev": "wrangler dev",
+    "cf:deploy": "wrangler deploy"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "wrangler": "^3.114.15"
+  },
+  "type": "module"
+}
