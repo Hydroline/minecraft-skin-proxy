@@ -24,6 +24,7 @@ export default {
     const target = `${TARGET_BASE}${pathname}${search}`;
 
     const forwardedHeaders = new Headers(request.headers);
+
     for (const header of CLEAN_HEADERS) {
       forwardedHeaders.delete(header);
     }
@@ -31,31 +32,45 @@ export default {
       forwardedHeaders.set(header, "");
     }
 
-    let response;
+    forwardedHeaders.set(
+      "User-Agent",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    );
+
+    const hasBody = !["GET", "HEAD"].includes(request.method);
+
     try {
-      response = await fetch(target, {
+      const response = await fetch(target, {
         method: request.method,
         headers: forwardedHeaders,
         redirect: "follow",
-        body: request.body,
+        body: hasBody ? request.body : null,
         cf: {
-          resolveOverride: "mc-heads.net",
-          colo: "SJC",
           cacheEverything: true,
           cacheTtl: 86400,
         },
       });
+
+      if (response.status >= 500) {
+        const errorText = await response.text();
+        return new Response(
+          `Upstream Error: ${response.status} - ${errorText}`,
+          {
+            status: response.status,
+            headers: { "Content-Type": "text/plain" },
+          }
+        );
+      }
+
+      return new Response(response.body, {
+        status: response.status,
+        headers: response.headers,
+      });
     } catch (error) {
-      return new Response(null, { status: 204 });
+      return new Response(`Worker Internal Error: ${error.message}`, {
+        status: 500,
+        headers: { "Content-Type": "text/plain" },
+      });
     }
-
-    if (response.status >= 500) {
-      return new Response(null, { status: 204 });
-    }
-
-    return new Response(response.body, {
-      status: response.status,
-      headers: response.headers,
-    });
   },
 };
