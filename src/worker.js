@@ -1,22 +1,10 @@
 const TARGET_BASE = "https://mc-heads.net";
 
-const CLEAN_HEADERS = [
-  "Origin",
-  "Referer",
-  "Sec-Fetch-Mode",
-  "Sec-Fetch-Site",
-  "Sec-Fetch-Dest",
-  "Sec-Fetch-User",
-  "CF-Connecting-IP",
-  "True-Client-IP",
-  "X-Real-IP",
-];
+const UPSTREAM_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-const IP_CLEAN_HEADERS = [
-  "X-Forwarded-For",
-  "CF-Connecting-IP",
-  "True-Client-IP",
-];
+const SUCCESS_CACHE_CONTROL = "public, max-age=21600";
+const ERROR_CACHE_CONTROL = "no-store";
 
 function detectImageContentType(bytes) {
   if (
@@ -71,19 +59,10 @@ export default {
     const { pathname, search } = new URL(request.url);
     const target = `${TARGET_BASE}${pathname}${search}`;
 
-    const forwardedHeaders = new Headers(request.headers);
-
-    for (const header of CLEAN_HEADERS) {
-      forwardedHeaders.delete(header);
-    }
-    for (const header of IP_CLEAN_HEADERS) {
-      forwardedHeaders.set(header, "");
-    }
-
-    forwardedHeaders.set(
-      "User-Agent",
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    );
+    const forwardedHeaders = new Headers({
+      Accept: request.headers.get("Accept") || "image/*,*/*;q=0.8",
+      "User-Agent": UPSTREAM_USER_AGENT,
+    });
 
     const hasBody = !["GET", "HEAD"].includes(request.method);
 
@@ -105,19 +84,32 @@ export default {
           `Upstream Error: ${response.status} - ${errorText}`,
           {
             status: response.status,
-            headers: { "Content-Type": "text/plain" },
+            headers: {
+              "Cache-Control": ERROR_CACHE_CONTROL,
+              "Content-Type": "text/plain",
+            },
           }
         );
       }
 
       const body = await response.arrayBuffer();
       const headers = new Headers(response.headers);
+      const isSuccess = response.status >= 200 && response.status < 300;
       const declaredContentType = headers.get("Content-Type") || "";
       const detectedContentType = detectImageContentType(new Uint8Array(body));
 
-      if (detectedContentType && declaredContentType.startsWith("text/html")) {
+      if (
+        isSuccess &&
+        detectedContentType &&
+        declaredContentType.startsWith("text/html")
+      ) {
         headers.set("Content-Type", detectedContentType);
       }
+
+      headers.set(
+        "Cache-Control",
+        isSuccess ? SUCCESS_CACHE_CONTROL : ERROR_CACHE_CONTROL
+      );
 
       return new Response(body, {
         status: response.status,
@@ -126,7 +118,10 @@ export default {
     } catch (error) {
       return new Response(`Worker Internal Error: ${error.message}`, {
         status: 500,
-        headers: { "Content-Type": "text/plain" },
+        headers: {
+          "Cache-Control": ERROR_CACHE_CONTROL,
+          "Content-Type": "text/plain",
+        },
       });
     }
   },
