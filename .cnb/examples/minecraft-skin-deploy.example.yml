@@ -10,7 +10,7 @@ allow_events:
 allow_branches:
   - main
 
-# SSH destination for the BaoTa production host.
+# SSH destination for the self-hosted production host.
 MINECRAFT_SKIN_DEPLOY_HOST: <server-host-or-ip>
 MINECRAFT_SKIN_DEPLOY_SSH_PORT: '233'
 MINECRAFT_SKIN_DEPLOY_USER: <deploy-user>

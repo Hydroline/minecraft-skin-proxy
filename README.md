@@ -1,29 +1,32 @@
 # minecraft-skin
 
-HydCraft 的 Minecraft 皮肤渲染服务，兼容现有 mc-heads 调用路径：
+HydCraft's self-hosted Minecraft skin rendering service. It preserves the
+existing mc-heads-compatible public routes while using NMSR and Mojang's
+official services instead of requesting `mc-heads.net`.
 
-- `GET /head/:player`：180 × 180 等距立体头像
-- `GET /body/:player`：高度 432 的等距全身像
-- `GET /avatar/:player`：180 × 180 平面头像（含帽子层）
-- `GET /skin/:player`：原始皮肤 PNG
+- `GET /head/:player`: 180 x 180 isometric head render.
+- `GET /body/:player`: isometric full-body render with a height of 432.
+- `GET /avatar/:player`: 180 x 180 flat face render with the hat layer.
+- `GET /skin/:player`: original skin PNG.
 
-`player` 支持 Minecraft 用户名、UUID 或 texture ID。服务不再请求
-`mc-heads.net`；NMSR 直接查询 Mojang 官方 API 和纹理服务。
+`player` accepts a Minecraft username, UUID, or texture ID.
 
 ## Production architecture
 
 ```text
-Client -> EdgeOne -> BaoTa Nginx -> Adapter -> NMSR -> Mojang
-                                      Docker network
+Client -> EdgeOne -> Self-hosted Nginx -> Adapter -> NMSR -> Mojang
+                                               Docker network
 ```
 
-`Adapter` 是稳定的公开兼容层，负责路径转换、统一 CORS / 缓存头和
-`/avatar` 生成。`NMSR` 只负责玩家资料解析和渲染。两者运行在同一个
-Docker Compose 项目中；NMSR 不映射到宿主机端口。
+The Adapter is the stable public compatibility layer. It owns route
+translation, CORS, cache headers, and `/avatar` generation. NMSR only resolves
+player data and renders skins. Both services run in one Docker Compose project;
+NMSR does not expose a host port.
 
 ## Repository and deployment model
 
-GitHub 是唯一源码仓库；CNB 是同步镜像、构建机和 Docker 制品库：
+GitHub is the only source repository. CNB is the synchronized mirror, build
+environment, and Docker artifact registry.
 
 ```text
 GitHub main push -> GitHub Actions sync -> CNB
@@ -31,20 +34,20 @@ GitHub manual Deploy -> sync -> CNB API trigger -> build images -> SSH deploy
 CNB web trigger -> build images -> SSH deploy
 ```
 
-CNB 在其构建机中编译固定版本的 NMSR，并推送两个不可变的 commit tag
-镜像。上海生产机仅登录制品库、拉取镜像并运行：从不编译 Rust、Node 或
-Docker image。
+CNB compiles the pinned NMSR revision and publishes two immutable images tagged
+with the commit SHA. The production host only authenticates to the registry,
+pulls images, and runs them; it never builds Rust, Node.js, or Docker images.
 
 ## Project layout
 
 ```text
-src/worker.js                    # 旧 Cloudflare Worker，仅作迁移期回退
-deploy/adapter/                  # 自维护的 Node HTTP compatibility adapter
-deploy/nmsr/                     # 固定 NMSR revision 的 CI-only Dockerfile
-deploy/compose.prod.yaml         # 宝塔生产机运行定义；没有 build 指令
-.cnb/                            # CNB build + SSH deploy pipeline
-.github/workflows/ci.yml         # CI + GitHub -> CNB sync
-.github/workflows/deploy.yml     # GitHub 手动触发 CNB API deploy
+src/worker.js                    # Legacy Cloudflare Worker kept for rollback
+deploy/adapter/                  # Maintained Node.js HTTP compatibility adapter
+deploy/nmsr/                     # Pinned NMSR revision and CI-only Dockerfile
+deploy/compose.prod.yaml         # Production runtime definition; no build key
+.cnb/                            # CNB image build and SSH deployment pipeline
+.github/workflows/ci.yml         # CI and GitHub-to-CNB synchronization
+.github/workflows/deploy.yml     # Manual GitHub trigger for CNB deployment
 ```
 
 ## Local validation
@@ -59,13 +62,13 @@ docker compose `
 ```
 
 The Compose file intentionally cannot build images. Image creation is reserved
-for CNB, so executing `docker compose up --build` on the production host is an
-invalid deployment method.
+for CNB, so `docker compose up --build` is not a valid production deployment
+method.
 
 ## First-time production host setup
 
-Create the project directory and copy the template once. The real `.env` stays
-only on the server and is preserved by all later CNB deployments.
+Create the runtime directory and its host-only `.env` file once. Subsequent
+CNB deployments preserve this file.
 
 ```bash
 install -d -m 755 /www/wwwroot/minecraft-skin
@@ -77,15 +80,15 @@ EOF
 chmod 600 .env
 ```
 
-After the first CNB deployment, create a BaoTa Website for
-`mc-heads.hydcraft.cn` and configure its reverse proxy target as:
+After the first CNB deployment, configure your self-hosted Nginx virtual host
+for `mc-heads.hydcraft.cn` to proxy requests to:
 
 ```text
 http://127.0.0.1:18080
 ```
 
-Do not expose port `18080` in the firewall. BaoTa Nginx owns TLS and public
-HTTP; Docker only listens on loopback.
+Nginx owns public HTTP and TLS. Do not expose port `18080` through the
+firewall; Docker binds it to loopback only.
 
 ## Required configuration
 
@@ -100,36 +103,35 @@ CNB_REPOSITORY_SLUG=HydCraft/minecraft-skin
 Repository secrets:
 
 ```text
-CNB_TOKEN=<CNB token that can push Git to HydCraft/minecraft-skin>
-CNB_API_TOKEN=<CNB API token that can start builds>
+CNB_TOKEN=<CNB token with Git push permission for HydCraft/minecraft-skin>
+CNB_API_TOKEN=<CNB token that can start builds>
 ```
 
-### CNB secret repository
+### CNB KeyStore repository
 
 Copy [`.cnb/examples/minecraft-skin-deploy.example.yml`](.cnb/examples/minecraft-skin-deploy.example.yml)
 to `HydCraft/hydcraft-secrets` as `minecraft-skin-deploy.yml`, then replace
-every placeholder. The template includes the allowed repository, branches and
-events as well as all SSH deployment settings.
+every placeholder. The template defines the allowed repository, branches,
+events, and all SSH deployment settings.
 
-Do not place `CNB_DOCKER_PULL_TOKEN` in CNB secrets. It belongs only in the
-production server's `/www/wwwroot/minecraft-skin/.env`, because it is consumed
-by Docker on that server.
+Do not place `CNB_DOCKER_PULL_TOKEN` in CNB KeyStore. It belongs only in the
+production host's `/www/wwwroot/minecraft-skin/.env`, where Docker consumes it.
 
 ## Deployment entry points
 
-1. **GitHub Actions**: run the `Deploy` workflow manually. It syncs `main` to
-   CNB and invokes CNB event `api_trigger_deploy`.
-2. **CNB**: open `HydCraft/minecraft-skin`, choose `web_trigger_deploy`, then
-   start it manually. This is useful if GitHub is unavailable.
+1. **GitHub Actions:** Run the `Deploy` workflow manually. It synchronizes
+   `main` to CNB and invokes the `api_trigger_deploy` event.
+2. **CNB:** Open `HydCraft/minecraft-skin`, select `web_trigger_deploy`, and
+   start it manually. This is useful when GitHub is unavailable.
 
 Both paths execute the same CNB pipeline and deploy the same immutable image
-tag. A successful deployment leaves `deploy/images.env` on the server; it
-records the exact NMSR and Adapter images required for rollback.
+tag. A successful deployment writes `images.env` to the runtime directory; it
+records the exact NMSR and Adapter image tags required for rollback.
 
 ## Rollback
 
-On the production server, set `NMSR_IMAGE` and `ADAPTER_IMAGE` in
-`deploy/images.env` to the previous commit tags, then run:
+On the production host, set `NMSR_IMAGE` and `ADAPTER_IMAGE` in `images.env`
+to the previous commit tags, then run:
 
 ```bash
 cd /www/wwwroot/minecraft-skin
@@ -137,4 +139,4 @@ docker compose --env-file .env --env-file images.env -f compose.prod.yaml up -d 
 ```
 
 The NMSR texture and profile cache is stored in the named Docker volume
-`minecraft-skin_nmsr-cache`, so normal image upgrades do not discard it.
+`minecraft-skin_nmsr-cache`, so ordinary image upgrades do not discard it.
