@@ -1,0 +1,41 @@
+main:
+  web_trigger_deploy:
+    - &production_deploy
+      name: 构建并部署 Minecraft Skin 生产环境
+      services:
+        - docker
+      docker:
+        image: docker:27-cli
+      imports:
+        - https://cnb.cool/HydCraft/hydcraft-secrets/-/blob/main/minecraft-skin-deploy.yml
+      stages:
+        - name: Build and publish immutable images
+          script: |
+            set -eu
+
+            apk add --no-cache openssh-client rsync bash
+
+            registry="${CNB_DOCKER_REGISTRY:-docker.cnb.cool}"
+            namespace="${CNB_REPO_SLUG_LOWERCASE:?CNB_REPO_SLUG_LOWERCASE is required}"
+            tag="${CNB_COMMIT_SHORT:?CNB_COMMIT_SHORT is required}"
+
+            export NMSR_IMAGE="$registry/$namespace/nmsr:$tag"
+            export ADAPTER_IMAGE="$registry/$namespace/adapter:$tag"
+
+            docker build --pull -f deploy/nmsr/Dockerfile -t "$NMSR_IMAGE" deploy/nmsr
+            docker build --pull -f deploy/adapter/Dockerfile -t "$ADAPTER_IMAGE" deploy/adapter
+            docker push "$NMSR_IMAGE"
+            docker push "$ADAPTER_IMAGE"
+
+            rm -rf deploy-artifact
+            mkdir -p deploy-artifact
+            cp deploy/compose.prod.yaml deploy-artifact/
+
+            printf 'NMSR_IMAGE=%s\nADAPTER_IMAGE=%s\n' "$NMSR_IMAGE" "$ADAPTER_IMAGE" > deploy-artifact/images.env
+
+        - name: Deploy
+          script: bash ./.cnb/scripts/deploy-production.sh
+
+  api_trigger_deploy:
+    - <<: *production_deploy
+      name: API 构建并部署 Minecraft Skin 生产环境

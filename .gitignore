@@ -7,4 +7,6 @@ yarn-error.log*
 .idea
 .vscode
 .env
+deploy/.env
+deploy/images.env
 .wrangler/

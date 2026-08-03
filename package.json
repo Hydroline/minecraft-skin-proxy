@@ -1,9 +1,10 @@
 {
-  "name": "minecraft-skin-proxy",
+  "name": "minecraft-skin",
   "version": "1.0.0",
-  "description": "Proxy middleware for minecraft skin services in Cloudflare workers environments.",
+  "description": "HydCraft-compatible Minecraft skin rendering service.",
   "main": "src/worker.js",
   "scripts": {
+    "check": "node --check src/worker.js && node --check deploy/adapter/src/server.js",
     "cf:dev": "wrangler dev",
     "cf:deploy": "wrangler deploy"
   },

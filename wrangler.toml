@@ -1,4 +1,4 @@
-name = "minecraft-skin-proxy"
+name = "minecraft-skin"
 main = "src/worker.js"
 workers_dev = false
 preview_urls = false

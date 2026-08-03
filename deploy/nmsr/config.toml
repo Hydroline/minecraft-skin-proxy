@@ -1,0 +1,26 @@
+[server]
+address = "0.0.0.0"
+port = 8080
+
+[caching]
+cleanup_interval = "1h"
+resolve_cache_duration = "15m"
+texture_cache_duration = "48h"
+
+[caching.cache_biases]
+
+[mojank]
+session_server = "https://sessionserver.mojang.com"
+textures_server = "https://textures.minecraft.net"
+mojang_api_server = "https://api.mojang.com"
+session_server_rate_limit = 10
+geysermc_api_server = "https://api.geysermc.org"
+allow_offline_mode_uuids = false
+use_dashless_uuids = false
+textures_server_skin_url_template = "{textures_server}/texture/{texture_id}"
+textures_server_cape_url_template = "{textures_server}/texture/{texture_id}"
+contact_info = "https://aurlemon.top"
+
+[rendering]
+sample_count = 1
+use_smaa = true

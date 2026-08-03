@@ -1,0 +1,22 @@
+name: minecraft-skin
+
+services:
+  nmsr:
+    image: ${NMSR_IMAGE:?Set NMSR_IMAGE in images.env}
+    restart: unless-stopped
+    volumes:
+      - nmsr-cache:/nmsr/cache
+
+  adapter:
+    image: ${ADAPTER_IMAGE:?Set ADAPTER_IMAGE in images.env}
+    depends_on:
+      - nmsr
+    environment:
+      NMSR_ORIGIN: http://nmsr:8080
+      PORT: 8080
+    ports:
+      - 127.0.0.1:${ADAPTER_HOST_PORT:-18080}:8080
+    restart: unless-stopped
+
+volumes:
+  nmsr-cache:
