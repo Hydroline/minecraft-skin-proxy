@@ -1,2 +1,15 @@
 include:
   - .cnb/pipelines/production-deploy.yml
+
+branch:
+  - reg: ^main$
+    buttons:
+      - name: 部署生产环境
+        description: 在 CNB 构建不可变 NMSR 与 Adapter 镜像并部署到生产服务器
+        event: web_trigger_deploy
+        groupName: 生产部署
+        isDefault: true
+        permissions:
+          roles:
+            - owner
+            - master

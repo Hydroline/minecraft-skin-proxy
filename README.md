@@ -106,18 +106,10 @@ CNB_API_TOKEN=<CNB API token that can start builds>
 
 ### CNB secret repository
 
-Create `HydCraft/hydcraft-secrets` file `minecraft-skin-deploy.yml` with:
-
-```yaml
-MINECRAFT_SKIN_DEPLOY_HOST: your-server-host-or-ip
-MINECRAFT_SKIN_DEPLOY_USER: root
-MINECRAFT_SKIN_DEPLOY_SSH_PORT: '233'
-MINECRAFT_SKIN_DEPLOY_SSH_PRIVATE_KEY: |
-  -----BEGIN OPENSSH PRIVATE KEY-----
-  replace-with-the-private-key-used-only-for-deployment
-  -----END OPENSSH PRIVATE KEY-----
-MINECRAFT_SKIN_REMOTE_DEPLOY_PATH: /www/wwwroot/minecraft-skin
-```
+Copy [`.cnb/examples/minecraft-skin-deploy.example.yml`](.cnb/examples/minecraft-skin-deploy.example.yml)
+to `HydCraft/hydcraft-secrets` as `minecraft-skin-deploy.yml`, then replace
+every placeholder. The template includes the allowed repository, branches and
+events as well as all SSH deployment settings.
 
 Do not place `CNB_DOCKER_PULL_TOKEN` in CNB secrets. It belongs only in the
 production server's `/www/wwwroot/minecraft-skin/.env`, because it is consumed

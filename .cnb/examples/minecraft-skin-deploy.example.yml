@@ -1,0 +1,29 @@
+# Copy this file to the CNB KeyStore repository as minecraft-skin-deploy.yml.
+# Replace every placeholder. Never commit the real file to this repository.
+#
+# This file authorizes only the minecraft-skin CNB repository to import the
+# deployment credential and only for the explicit production deploy events.
+allow_slugs: HydCraft/minecraft-skin
+allow_events:
+  - web_trigger_deploy
+  - api_trigger_deploy
+allow_branches:
+  - main
+
+# SSH destination for the BaoTa production host.
+MINECRAFT_SKIN_DEPLOY_HOST: <server-host-or-ip>
+MINECRAFT_SKIN_DEPLOY_SSH_PORT: '233'
+MINECRAFT_SKIN_DEPLOY_USER: <deploy-user>
+MINECRAFT_SKIN_DEPLOY_SSH_PRIVATE_KEY: |-
+  -----BEGIN OPENSSH PRIVATE KEY-----
+  <paste-the-complete-private-key-used-only-for-deployment-here>
+  -----END OPENSSH PRIVATE KEY-----
+
+# This directory contains compose.prod.yaml, images.env and the host-only .env.
+# The deploy pipeline preserves the existing .env, so keep the CNB Docker pull
+# token only on the server rather than adding it to this KeyStore file.
+MINECRAFT_SKIN_REMOTE_DEPLOY_PATH: /www/wwwroot/minecraft-skin
+
+# Permit the pipeline definition imported by .cnb.yml.
+include:
+  - .cnb/pipelines/production-deploy.yml
