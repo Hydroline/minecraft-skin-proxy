@@ -5,6 +5,9 @@ const USERNAME_PATTERN = /^[A-Za-z0-9_]{1,16}$/;
 const UUID_PATTERN = /^[0-9a-f]{32}$/i;
 const TEXTURE_ID_PATTERN = /^[0-9a-f]{64}$/i;
 const PNG_SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+const HEAD_RENDER_SIZE = 180;
+const HEAD_VISIBLE_ALPHA = 16;
+const HEAD_VERTICAL_PADDING = 3;
 
 const RENDER_PROFILES = {
   body: {
@@ -215,6 +218,54 @@ async function renderAvatar(skinBytes) {
   return encodeRgbaPng(output);
 }
 
+async function fitHeadRender(headBytes) {
+  const source = await decodeRgbaPng(headBytes);
+  let left = source.width;
+  let top = source.height;
+  let right = 0;
+  let bottom = 0;
+
+  for (let y = 0; y < source.height; y += 1) {
+    for (let x = 0; x < source.width; x += 1) {
+      if (source.data[(y * source.width + x) * 4 + 3] < HEAD_VISIBLE_ALPHA) continue;
+      left = Math.min(left, x);
+      top = Math.min(top, y);
+      right = Math.max(right, x + 1);
+      bottom = Math.max(bottom, y + 1);
+    }
+  }
+
+  if (left === source.width || top === source.height) {
+    throw new Error("NMSR head render is fully transparent.");
+  }
+
+  const cropWidth = right - left;
+  const cropHeight = bottom - top;
+  const availableHeight = HEAD_RENDER_SIZE - HEAD_VERTICAL_PADDING * 2;
+  const scale = Math.min(HEAD_RENDER_SIZE / cropWidth, availableHeight / cropHeight);
+  const targetWidth = Math.max(1, Math.round(cropWidth * scale));
+  const targetHeight = Math.max(1, Math.round(cropHeight * scale));
+  const targetLeft = Math.floor((HEAD_RENDER_SIZE - targetWidth) / 2);
+  const targetTop = Math.floor((HEAD_RENDER_SIZE - targetHeight) / 2);
+  const output = {
+    data: new Uint8Array(HEAD_RENDER_SIZE * HEAD_RENDER_SIZE * 4),
+    height: HEAD_RENDER_SIZE,
+    width: HEAD_RENDER_SIZE,
+  };
+
+  for (let y = 0; y < targetHeight; y += 1) {
+    const sourceY = top + Math.min(cropHeight - 1, Math.floor(y / scale));
+    for (let x = 0; x < targetWidth; x += 1) {
+      const sourceX = left + Math.min(cropWidth - 1, Math.floor(x / scale));
+      const sourceOffset = (sourceY * source.width + sourceX) * 4;
+      const targetOffset = ((targetTop + y) * output.width + targetLeft + x) * 4;
+      output.data.set(source.data.subarray(sourceOffset, sourceOffset + 4), targetOffset);
+    }
+  }
+
+  return encodeRgbaPng(output);
+}
+
 function createHeaders() {
   return new Headers({
     "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
@@ -313,7 +364,9 @@ export default {
       const origin = getNmsrOrigin(env);
       const image = route.route === "avatar"
         ? await renderAvatar(await fetchNmsr(origin, env.NMSR_ORIGIN_TOKEN, "skin", route.player))
-        : await fetchNmsr(origin, env.NMSR_ORIGIN_TOKEN, route.route, route.player);
+        : route.route === "head"
+          ? await fitHeadRender(await fetchNmsr(origin, env.NMSR_ORIGIN_TOKEN, "head", route.player))
+          : await fetchNmsr(origin, env.NMSR_ORIGIN_TOKEN, route.route, route.player);
       const response = new Response(image, { headers: createHeaders() });
       context.waitUntil(caches.default.put(key, response.clone()));
       return request.method === "HEAD"
