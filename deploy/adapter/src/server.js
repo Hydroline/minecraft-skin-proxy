@@ -6,6 +6,7 @@ const ERROR_CACHE_CONTROL = 'no-store'
 const USERNAME_PATTERN = /^[A-Za-z0-9_]{1,16}$/
 const UUID_PATTERN = /^[0-9a-f]{32}$/i
 const TEXTURE_ID_PATTERN = /^[0-9a-f]{64}$/i
+const FALLBACK_PLAYER = 'MHF_Steve'
 const PNG_SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
 const HEAD_RENDER_SIZE = 180
 const HEAD_VISIBLE_ALPHA = 16
@@ -285,8 +286,7 @@ function parseRoute(pathname) {
   if (segments.length !== 2) return null
   const [route, player] = segments.map((segment) => decodeURIComponent(segment))
   if (!RENDER_PROFILES[route] && route !== 'avatar') return null
-  if (!isPlayerIdentifier(player)) return null
-  return { player, route }
+  return { player: isPlayerIdentifier(player) ? player : FALLBACK_PLAYER, route }
 }
 
 function createNmsrUrl(route, player) {
@@ -311,6 +311,15 @@ async function fetchNmsr(route, player) {
   return new Uint8Array(await response.arrayBuffer())
 }
 
+async function fetchNmsrWithFallback(route, player) {
+  try {
+    return await fetchNmsr(route, player)
+  } catch (error) {
+    if (player === FALLBACK_PLAYER || ![400, 404].includes(error.status)) throw error
+    return fetchNmsr(route, FALLBACK_PLAYER)
+  }
+}
+
 async function handleRequest(request, response) {
   if (request.method === 'OPTIONS') return send(response, 204, undefined, createImageHeaders())
   if (!new Set(['GET', 'HEAD']).has(request.method)) return sendError(response, 405, 'Method not allowed.')
@@ -328,10 +337,10 @@ async function handleRequest(request, response) {
 
   try {
     const image = route.route === 'avatar'
-      ? await renderAvatar(await fetchNmsr('skin', route.player))
+      ? await renderAvatar(await fetchNmsrWithFallback('skin', route.player))
       : route.route === 'head'
-        ? await fitHeadRender(await fetchNmsr('head', route.player))
-        : await fetchNmsr(route.route, route.player)
+        ? await fitHeadRender(await fetchNmsrWithFallback('head', route.player))
+        : await fetchNmsrWithFallback(route.route, route.player)
     return send(response, 200, request.method === 'HEAD' ? undefined : image, createImageHeaders())
   } catch (error) {
     const status = Number.isInteger(error.status) && error.status >= 400 && error.status < 600

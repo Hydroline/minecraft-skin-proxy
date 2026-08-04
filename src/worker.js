@@ -4,6 +4,7 @@ const ERROR_CACHE_CONTROL = "no-store";
 const USERNAME_PATTERN = /^[A-Za-z0-9_]{1,16}$/;
 const UUID_PATTERN = /^[0-9a-f]{32}$/i;
 const TEXTURE_ID_PATTERN = /^[0-9a-f]{64}$/i;
+const FALLBACK_PLAYER = "MHF_Steve";
 const PNG_SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 const HEAD_RENDER_SIZE = 180;
 const HEAD_VISIBLE_ALPHA = 16;
@@ -302,8 +303,7 @@ function parseRoute(pathname) {
   if (segments.length !== 2) return null;
   const [route, player] = segments.map((segment) => decodeURIComponent(segment));
   if (!RENDER_PROFILES[route] && route !== "avatar") return null;
-  if (!isPlayerIdentifier(player)) return null;
-  return { player, route };
+  return { player: isPlayerIdentifier(player) ? player : FALLBACK_PLAYER, route };
 }
 
 function getNmsrOrigin(env) {
@@ -336,9 +336,19 @@ async function fetchNmsr(origin, originToken, route, player) {
   return new Uint8Array(await response.arrayBuffer());
 }
 
-function cacheKeyFor(request) {
+async function fetchNmsrWithFallback(origin, originToken, route, player) {
+  try {
+    return await fetchNmsr(origin, originToken, route, player);
+  } catch (error) {
+    if (player === FALLBACK_PLAYER || ![400, 404].includes(error.status)) throw error;
+    return fetchNmsr(origin, originToken, route, FALLBACK_PLAYER);
+  }
+}
+
+function cacheKeyFor(request, route) {
   const url = new URL(request.url);
   url.search = "";
+  url.pathname = `/${route.route}/${encodeURIComponent(route.player)}`;
   return new Request(url.toString(), { method: "GET" });
 }
 
@@ -352,7 +362,7 @@ export default {
     const route = parseRoute(new URL(request.url).pathname);
     if (!route) return createErrorResponse(404, "Unsupported skin route.");
 
-    const key = cacheKeyFor(request);
+    const key = cacheKeyFor(request, route);
     const cached = await caches.default.match(key);
     if (cached) {
       return request.method === "HEAD"
@@ -363,10 +373,10 @@ export default {
     try {
       const origin = getNmsrOrigin(env);
       const image = route.route === "avatar"
-        ? await renderAvatar(await fetchNmsr(origin, env.NMSR_ORIGIN_TOKEN, "skin", route.player))
+        ? await renderAvatar(await fetchNmsrWithFallback(origin, env.NMSR_ORIGIN_TOKEN, "skin", route.player))
         : route.route === "head"
-          ? await fitHeadRender(await fetchNmsr(origin, env.NMSR_ORIGIN_TOKEN, "head", route.player))
-          : await fetchNmsr(origin, env.NMSR_ORIGIN_TOKEN, route.route, route.player);
+          ? await fitHeadRender(await fetchNmsrWithFallback(origin, env.NMSR_ORIGIN_TOKEN, "head", route.player))
+          : await fetchNmsrWithFallback(origin, env.NMSR_ORIGIN_TOKEN, route.route, route.player);
       const response = new Response(image, { headers: createHeaders() });
       context.waitUntil(caches.default.put(key, response.clone()));
       return request.method === "HEAD"

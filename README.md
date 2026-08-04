@@ -9,7 +9,9 @@ official services instead of requesting `mc-heads.net`.
 - `GET /avatar/:player`: 180 x 180 flat face render with the hat layer.
 - `GET /skin/:player`: original skin PNG.
 
-`player` accepts a Minecraft username, UUID, or texture ID.
+`player` accepts a Minecraft username, UUID, or texture ID. Invalid or unresolved
+identifiers fall back to the default Steve skin so image consumers always receive
+a usable PNG.
 
 ## Production architecture
 
