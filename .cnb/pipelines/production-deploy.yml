@@ -4,6 +4,8 @@ main:
       name: 构建并部署 Minecraft Skin 生产环境
       services:
         - docker
+      runner:
+        cpus: 4
       docker:
         image: docker:27-cli
       imports:
@@ -19,12 +21,29 @@ main:
             namespace="${CNB_REPO_SLUG_LOWERCASE:?CNB_REPO_SLUG_LOWERCASE is required}"
             tag="${CNB_COMMIT_SHORT:?CNB_COMMIT_SHORT is required}"
 
-            export NMSR_IMAGE="$registry/$namespace/nmsr:$tag"
+            for image in rust:slim-bookworm debian:bookworm-slim; do
+              docker pull "$image"
+            done
+
+            nmsr_fingerprint="$(
+              {
+                sha256sum deploy/nmsr/Dockerfile deploy/nmsr/config.toml
+                docker image inspect --format '{{index .RepoDigests 0}}' rust:slim-bookworm
+                docker image inspect --format '{{index .RepoDigests 0}}' debian:bookworm-slim
+              } | sha256sum | cut -d ' ' -f 1
+            )"
+
+            export NMSR_IMAGE="$registry/$namespace/nmsr:$nmsr_fingerprint"
             export ADAPTER_IMAGE="$registry/$namespace/adapter:$tag"
 
-            docker build --pull -f deploy/nmsr/Dockerfile -t "$NMSR_IMAGE" deploy/nmsr
+            if docker manifest inspect "$NMSR_IMAGE" >/dev/null 2>&1; then
+              echo "Reusing immutable NMSR image: $NMSR_IMAGE"
+            else
+              docker build --pull -f deploy/nmsr/Dockerfile -t "$NMSR_IMAGE" deploy/nmsr
+              docker push "$NMSR_IMAGE"
+            fi
+
             docker build --pull -f deploy/adapter/Dockerfile -t "$ADAPTER_IMAGE" deploy/adapter
-            docker push "$NMSR_IMAGE"
             docker push "$ADAPTER_IMAGE"
 
             rm -rf deploy-artifact

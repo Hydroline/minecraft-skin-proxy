@@ -182,7 +182,7 @@ async function encodeRgbaPng({ data, height, width }) {
 
 async function renderAvatar(skinBytes) {
   const source = await decodeRgbaPng(skinBytes)
-  if (source.width < 64 || source.height < 64) {
+  if (source.width < 48 || source.height < 16) {
     throw new Error('NMSR returned a skin with unsupported dimensions.')
   }
 
